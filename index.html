@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>音声課題の提出</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* 1カラムのスマホ用フォーム。録音中の項目だけを大きく見せ、操作は親指の届く下側に置く */
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --ink: #172033; --muted: #5a6475; --line: #dbe0e8;
+  --accent: #1f4fa8; --accent-ink: #ffffff; --accent-soft: #e6edfa;
+  --rec: #d3302b; --ok: #1b7a4b; --ok-soft: #e3f3ea; --warn: #9a5b00; --warn-soft: #fbf0dc;
+  --wave: #1f4fa8;
+  --f-display: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --f-body: "BIZ UDPGothic", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f131a; --surface: #19202b; --ink: #e8ecf3; --muted: #9aa4b4; --line: #2b3442;
+    --accent: #7ea4ff; --accent-ink: #0f131a; --accent-soft: #1d2a45;
+    --rec: #ff5b52; --ok: #4fc58c; --ok-soft: #153325; --warn: #f2a83c; --warn-soft: #3a2a10;
+    --wave: #7ea4ff;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body);
+  font-size: 16px; line-height: 1.7; -webkit-text-size-adjust: 100%;
+  padding: env(safe-area-inset-top, 0px) 16px env(safe-area-inset-bottom, 0px);
+}
+main { max-width: 34rem; margin: 0 auto; padding-block: 20px 40px; }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-size: 1.45rem; }
+h2 { font-size: 1.15rem; }
+p { margin: 0; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.eyebrow { font-size: .78rem; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.notice { border-radius: 12px; padding: 12px 14px; font-size: .92rem; }
+.notice.warn { background: var(--warn-soft); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+.notice.err { background: color-mix(in srgb, var(--rec) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--rec) 45%, transparent); }
+.notice strong { display: block; margin-bottom: 2px; }
+.notice a { color: var(--accent); font-weight: 700; }
+ul.tips { margin: 0; padding-left: 1.2em; }
+ul.tips li + li { margin-top: 4px; }
+dl.meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: .92rem; }
+dl.meta dt { color: var(--muted); }
+dl.meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+label { display: block; font-weight: 700; font-size: .92rem; margin-bottom: 6px; }
+input[type=text] {
+  width: 100%; font: inherit; font-size: 1.05rem; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+input[type=text]:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
+
+button { font: inherit; cursor: pointer; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 0 20px; border-radius: 12px; border: 1px solid transparent;
+  font-weight: 700; font-size: 1rem; text-decoration: none;
+}
+.btn:focus-visible, .rec-btn:focus-visible, .chip-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.secondary { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.btn.block { width: 100%; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; min-width: 0; }
+
+/* 録音画面 */
+.progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dots { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.dot.done { background: var(--ok); border-color: var(--ok); }
+.dot.current { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.prompt { padding: 28px 18px; text-align: center; }
+.prompt .text { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.7rem, 7vw, 2.5rem); line-height: 1.4; overflow-wrap: anywhere; }
+.prompt .note { margin-top: 10px; color: var(--muted); font-size: 1rem; overflow-wrap: anywhere; }
+.recorder { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-block: 8px; }
+.rec-btn {
+  width: 92px; height: 92px; border-radius: 50%; border: 4px solid var(--rec); background: var(--surface);
+  display: grid; place-items: center; padding: 0;
+}
+.rec-btn span { display: block; width: 62px; height: 62px; border-radius: 50%; background: var(--rec); transition: all .18s ease; }
+.rec-btn.on span { width: 34px; height: 34px; border-radius: 7px; }
+.rec-btn:disabled { opacity: .4; }
+.rec-label { font-weight: 700; }
+.timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .95rem; }
+.meter { width: 100%; max-width: 260px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0%; background: var(--ok); transition: width .06s linear; }
+.meter.hot i { background: var(--rec); }
+.take { display: flex; flex-direction: column; gap: 12px; }
+canvas.wave { width: 100%; height: 72px; display: block; border-radius: 8px; background: var(--accent-soft); }
+audio { width: 100%; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: .88rem; font-weight: 700; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.linkish { background: none; border: 0; color: var(--accent); font-weight: 700; padding: 8px 0; text-align: left; }
+
+/* 確認画面 */
+ol.review { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+ol.review li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 4px 10px; align-items: center; padding-block: 12px; border-bottom: 1px solid var(--line); }
+ol.review li:last-child { border-bottom: 0; }
+ol.review .no { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+ol.review .t { min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+ol.review .sub { grid-column: 2 / 4; display: flex; gap: 14px; align-items: center; font-size: .85rem; color: var(--muted); flex-wrap: wrap; }
+ol.review .sub .warn { color: var(--warn); font-weight: 700; }
+.chip-btn { min-width: 64px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 700; padding: 0 12px; }
+.chip-btn.playing { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.bar { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }
+
+/* 完了画面 */
+.receipt { text-align: center; padding: 26px 18px; }
+.receipt .check { width: 56px; height: 56px; border-radius: 50%; background: var(--ok); color: var(--surface); display: grid; place-items: center; margin: 0 auto 12px; font-size: 1.8rem; font-weight: 700; }
+.receipt .code { font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 700; letter-spacing: .04em; margin-top: 6px; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main id="app">
+
+  <section id="s-loading" class="stack">
+    <p class="muted">課題を読み込んでいます…</p>
+  </section>
+
+  <section id="s-error" class="stack" hidden>
+    <h1>課題を開けませんでした</h1>
+    <div class="notice err"><span id="error-msg"></span></div>
+    <p class="small muted">リンクをもう一度確かめるか、担当の先生に連絡してください。</p>
+  </section>
+
+  <section id="s-start" class="stack" hidden>
+    <div class="stack" style="gap:6px">
+      <span class="eyebrow">音声課題</span>
+      <h1 id="a-title"></h1>
+    </div>
+    <p id="a-desc"></p>
+    <dl class="meta">
+      <dt>項目数</dt><dd id="a-count"></dd>
+      <dt>締切</dt><dd id="a-deadline"></dd>
+    </dl>
+    <div id="inapp-warning" class="notice warn" hidden></div>
+    <div id="closed-warning" class="notice err" hidden><strong>締切を過ぎています</strong>この課題はもう提出できません。</div>
+    <div id="demo-warning" class="notice warn" hidden><strong>デモ表示です</strong>受付先が設定されていないため、録音はできますが送信はされません。</div>
+    <form id="f-student" class="panel stack" novalidate>
+      <div>
+        <label for="student-id">学籍番号</label>
+        <input type="text" id="student-id" autocomplete="off" inputmode="text" required>
+      </div>
+      <div>
+        <label for="student-name">氏名</label>
+        <input type="text" id="student-name" autocomplete="name" required>
+      </div>
+      <div class="small muted">
+        <ul class="tips">
+          <li>静かな部屋で録音してください。</li>
+          <li>スマホは口から20cmほど離して持ちます。</li>
+          <li>「マイクの使用」をたずねられたら「許可」を押してください。</li>
+        </ul>
+      </div>
+      <div id="start-error" class="notice err" hidden></div>
+      <button class="btn primary block" id="btn-begin" type="submit">マイクを使って始める</button>
+    </form>
+  </section>
+
+  <section id="s-record" class="stack" hidden>
+    <div class="progress">
+      <span class="eyebrow" id="r-count"></span>
+      <div class="dots" id="r-dots" aria-hidden="true"></div>
+    </div>
+    <div class="panel prompt">
+      <div class="small muted" style="margin-bottom:8px">次のとおりに発音してください</div>
+      <div class="text" id="r-text"></div>
+      <div class="note" id="r-note"></div>
+    </div>
+
+    <div class="recorder" id="r-recorder">
+      <button class="rec-btn" id="btn-rec" type="button" aria-label="録音を始める"><span></span></button>
+      <div class="rec-label" id="rec-label">タップして録音</div>
+      <div class="timer" id="rec-timer"></div>
+      <div class="meter" id="rec-meter"><i></i></div>
+    </div>
+
+    <div class="panel take" id="r-take" hidden>
+      <canvas class="wave" id="take-wave"></canvas>
+      <audio id="take-audio" controls preload="auto"></audio>
+      <div><span class="chip" id="take-chip"></span></div>
+      <div class="row">
+        <button class="btn secondary" id="btn-retake" type="button">録り直す</button>
+        <button class="btn primary" id="btn-next" type="button">次へ</button>
+      </div>
+    </div>
+
+    <button class="linkish" id="btn-prev" type="button">← 前の項目にもどる</button>
+  </section>
+
+  <section id="s-review" class="stack" hidden>
+    <div class="stack" style="gap:6px">
+      <span class="eyebrow">送信前の確認</span>
+      <h1>録音を聞いて確かめてください</h1>
+    </div>
+    <p class="small muted">気になる項目は「録り直す」を押すと、その項目だけ録音し直せます。</p>
+    <div class="panel" style="padding-block:4px">
+      <ol class="review" id="review-list"></ol>
+    </div>
+    <div id="send-progress" class="stack" style="gap:8px" hidden>
+      <div class="bar"><i id="send-bar"></i></div>
+      <div class="small muted" id="send-label"></div>
+    </div>
+    <div id="send-error" class="notice err" hidden></div>
+    <button class="btn primary block" id="btn-send" type="button">この内容で提出する</button>
+  </section>
+
+  <section id="s-done" class="stack" hidden>
+    <div class="panel receipt">
+      <div class="check" aria-hidden="true">✓</div>
+      <h1>提出しました</h1>
+      <div class="small muted" style="margin-top:10px">受付番号</div>
+      <div class="code" id="d-receipt"></div>
+    </div>
+    <dl class="meta panel">
+      <dt>課題</dt><dd id="d-title"></dd>
+      <dt>氏名</dt><dd id="d-name"></dd>
+      <dt>受信</dt><dd id="d-count"></dd>
+      <dt>日時</dt><dd id="d-time"></dd>
+    </dl>
+    <p class="small muted">念のため、この画面をスクリーンショットで保存しておいてください。もう一度提出すると、新しい提出として受け付けます。</p>
+    <div id="d-demo" class="notice warn" hidden><strong>デモ表示です</strong>実際には送信していません。</div>
+  </section>
+
+</main>
+<script src="config.js"></script>
+<script>
+(() => {
+  'use strict';
+  const CFG = window.VOICE_SUBMIT_CONFIG || {};
+  const API = (CFG.apiUrl || '').trim();
+  const DEMO = !API;
+  const $ = (id) => document.getElementById(id);
+  const screens = ['s-loading', 's-error', 's-start', 's-record', 's-review', 's-done'];
+  function show(id) {
+    screens.forEach((s) => { $(s).hidden = s !== id; });
+    window.scrollTo(0, 0);
+  }
+
+  const state = {
+    assignment: null, student: { id: '', name: '' },
+    takes: [], idx: 0, submissionId: '', uploaded: new Set(), submitted: false,
+  };
+
+  // ---------- 課題の読み込み ----------
+  const DEMO_ASSIGNMENT = {
+    id: 'demo', title: 'デモ：英語の母音と単語', closed: false, deadline: '',
+    description: '表示される語を、ふだんの速さで1回ずつ発音してください。',
+    items: [
+      { no: 1, text: 'heed', note: '/hiːd/', maxSec: 10 },
+      { no: 2, text: 'hid', note: '/hɪd/', maxSec: 10 },
+      { no: 3, text: 'Please call Stella.', note: '文はひと息で読みます', maxSec: 15 },
+    ],
+  };
+
+  async function loadAssignment() {
+    const params = new URLSearchParams(location.search);
+    const id = (params.get('a') || '').trim();
+    if (DEMO) return DEMO_ASSIGNMENT;
+    if (!id) throw new Error('リンクに課題の指定（?a=…）がありません。');
+    const res = await fetch(API + '?action=config&a=' + encodeURIComponent(id));
+    const json = await res.json();
+    if (!json.ok) {
+      if (json.error === 'not_found') throw new Error('課題「' + id + '」は見つかりませんでした。');
+      throw new Error('受付先からエラーが返りました（' + json.error + '）。');
+    }
+    return json.assignment;
+  }
+
+  // ---------- アプリ内ブラウザの検出 ----------
+  function inAppBrowserNotice() {
+    const ua = navigator.userAgent;
+    if (/\bLine\//i.test(ua)) {
+      const u = new URL(location.href);
+      u.searchParams.set('openExternalBrowser', '1');
+      return '<strong>LINEの中で開いています</strong>LINEの画面では録音できないことがあります。<a href="' + u.href + '">SafariやChromeで開き直す</a>';
+    }
+    if (/Instagram|FBAN|FBAV|MicroMessenger|Twitter/i.test(ua)) {
+      return '<strong>アプリの中で開いています</strong>録音できない場合は、右上のメニューから「ブラウザで開く」を選んでください。';
+    }
+    return '';
+  }
+
+  function fillStart(a) {
+    $('a-title').textContent = a.title;
+    $('a-desc').textContent = a.description || '';
+    $('a-desc').hidden = !a.description;
+    $('a-count').textContent = a.items.length + ' 項目';
+    $('a-deadline').textContent = a.deadline || 'なし';
+    $('closed-warning').hidden = !a.closed;
+    $('demo-warning').hidden = !DEMO;
+    $('btn-begin').disabled = !!a.closed;
+    const w = inAppBrowserNotice();
+    if (w) { $('inapp-warning').innerHTML = w; $('inapp-warning').hidden = false; }
+    try {
+      $('student-id').value = localStorage.getItem('vs.studentId') || '';
+      $('student-name').value = localStorage.getItem('vs.studentName') || '';
+    } catch (e) { /* 保存できない環境では空欄のまま */ }
+    document.title = a.title + '｜音声課題の提出';
+  }
+
+  // ---------- 録音 ----------
+  const rec = {
+    stream: null, ctx: null, chunks: [], length: 0, recording: false, level: 0,
+    async init() {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      const src = this.ctx.createMediaStreamSource(this.stream);
+      const proc = this.ctx.createScriptProcessor(4096, 1, 1);
+      const mute = this.ctx.createGain();
+      mute.gain.value = 0;
+      src.connect(proc); proc.connect(mute); mute.connect(this.ctx.destination);
+      proc.onaudioprocess = (e) => {
+        const d = e.inputBuffer.getChannelData(0);
+        let pk = 0;
+        for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > pk) pk = v; }
+        this.level = pk;
+        if (this.recording) { this.chunks.push(new Float32Array(d)); this.length += d.length; }
+      };
+      this._proc = proc; // GCで止まらないよう参照を持つ
+    },
+    get rate() { return this.ctx.sampleRate; },
+    get seconds() { return this.length / this.ctx.sampleRate; },
+    async start() {
+      if (this.ctx.state !== 'running') await this.ctx.resume();
+      this.chunks = []; this.length = 0; this.recording = true;
+    },
+    stop() {
+      this.recording = false;
+      const out = new Float32Array(this.length);
+      let o = 0;
+      for (const c of this.chunks) { out.set(c, o); o += c.length; }
+      this.chunks = [];
+      return out;
+    },
+  };
+
+  function encodeWav(samples, rate) {
+    const buf = new ArrayBuffer(44 + samples.length * 2);
+    const v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE');
+    str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, samples.length * 2, true);
+    let o = 44;
+    for (let i = 0; i < samples.length; i++, o += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+
+  function assess(take) {
+    if (take.dur < 0.4) return { level: 'warn', text: '録音が短すぎます。もう一度録ってください。' };
+    if (take.peak >= 0.99) return { level: 'warn', text: '音が割れています。スマホを少し離して録り直してください。' };
+    if (take.peak < 0.03) return { level: 'warn', text: '音がとても小さいです。もう少し近くで録り直してください。' };
+    return { level: 'ok', text: '録音できました。聞いて確かめてください。' };
+  }
+
+  function drawWave(canvas, samples) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    const g = canvas.getContext('2d');
+    g.scale(dpr, dpr);
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--wave').trim();
+    const step = Math.max(1, Math.floor(samples.length / w));
+    const mid = h / 2;
+    for (let x = 0; x < w; x++) {
+      let mn = 0, mx = 0;
+      const s0 = x * step;
+      for (let i = s0; i < s0 + step && i < samples.length; i++) {
+        const v = samples[i]; if (v < mn) mn = v; if (v > mx) mx = v;
+      }
+      const y1 = mid - mx * mid * 0.95, y2 = mid - mn * mid * 0.95;
+      g.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+    }
+  }
+
+  const fmt = (s) => { const t = Math.floor(s); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+
+  // ---------- 録音画面 ----------
+  let tick = null;
+  function renderRecord() {
+    const a = state.assignment, i = state.idx, item = a.items[i];
+    const take = state.takes[i];
+    $('r-count').textContent = (i + 1) + ' / ' + a.items.length;
+    $('r-dots').innerHTML = a.items.map((_, k) =>
+      '<span class="dot' + (state.takes[k] ? ' done' : '') + (k === i ? ' current' : '') + '"></span>').join('');
+    $('r-text').textContent = item.text;
+    $('r-note').textContent = item.note || '';
+    $('r-note').hidden = !item.note;
+    $('btn-prev').hidden = i === 0;
+    $('btn-next').textContent = i === a.items.length - 1 ? '確認へ進む' : '次へ';
+    setRecUI(false);
+    $('rec-timer').textContent = '最長 ' + fmt(item.maxSec || 30);
+    if (take) {
+      $('r-recorder').hidden = true;
+      $('r-take').hidden = false;
+      $('take-audio').src = take.url;
+      requestAnimationFrame(() => drawWave($('take-wave'), take.samples));
+      const q = assess(take);
+      $('take-chip').className = 'chip ' + q.level;
+      $('take-chip').textContent = q.text;
+    } else {
+      $('r-recorder').hidden = false;
+      $('r-take').hidden = true;
+    }
+  }
+
+  function setRecUI(on) {
+    $('btn-rec').classList.toggle('on', on);
+    $('btn-rec').setAttribute('aria-label', on ? '録音を止める' : '録音を始める');
+    $('rec-label').textContent = on ? 'タップして停止' : 'タップして録音';
+    $('btn-prev').disabled = on;
+  }
+
+  async function startRec() {
+    const item = state.assignment.items[state.idx];
+    const max = item.maxSec || 30;
+    await rec.start();
+    setRecUI(true);
+    tick = setInterval(() => {
+      const s = rec.seconds;
+      $('rec-timer').textContent = fmt(s) + ' / ' + fmt(max);
+      if (s >= max) stopRec();
+    }, 100);
+  }
+
+  function stopRec() {
+    if (!rec.recording) return;
+    clearInterval(tick); tick = null;
+    const samples = rec.stop();
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) { const v = Math.abs(samples[i]); if (v > peak) peak = v; }
+    const blob = encodeWav(samples, rec.rate);
+    const old = state.takes[state.idx];
+    if (old) URL.revokeObjectURL(old.url);
+    state.takes[state.idx] = { samples, blob, url: URL.createObjectURL(blob), dur: samples.length / rec.rate, peak, rate: rec.rate };
+    state.uploaded.delete(state.idx);
+    renderRecord();
+  }
+
+  // 入力レベルのメーター
+  (function meterLoop() {
+    if (rec.ctx && !$('s-record').hidden && !$('r-recorder').hidden) {
+      const v = Math.min(1, rec.level * 1.4);
+      $('rec-meter').firstElementChild.style.width = (v * 100).toFixed(0) + '%';
+      $('rec-meter').classList.toggle('hot', rec.level >= 0.98);
+    }
+    requestAnimationFrame(meterLoop);
+  })();
+
+  // ---------- 確認画面 ----------
+  const player = new Audio();
+  let playingIdx = -1;
+  player.addEventListener('ended', () => { playingIdx = -1; renderReview(); });
+
+  function renderReview() {
+    const a = state.assignment;
+    $('review-list').innerHTML = '';
+    a.items.forEach((item, k) => {
+      const t = state.takes[k];
+      const q = t ? assess(t) : null;
+      const li = document.createElement('li');
+      li.innerHTML =
+        '<span class="no">' + String(item.no).padStart(2, '0') + '</span>' +
+        '<span class="t"></span>' +
+        '<button class="chip-btn" type="button" data-play="' + k + '">' + (playingIdx === k ? '停止' : '再生') + '</button>' +
+        '<span class="sub"><span>' + (t ? t.dur.toFixed(1) + ' 秒' : '未録音') + '</span>' +
+        (q && q.level === 'warn' ? '<span class="warn">要確認</span>' : '') +
+        '<button class="linkish" type="button" data-retake="' + k + '">録り直す</button></span>';
+      li.querySelector('.t').textContent = item.text;
+      if (playingIdx === k) li.querySelector('.chip-btn').classList.add('playing');
+      $('review-list').appendChild(li);
+    });
+    const missing = a.items.filter((_, k) => !state.takes[k]).length;
+    $('btn-send').disabled = missing > 0;
+    $('btn-send').textContent = missing > 0 ? 'あと ' + missing + ' 項目の録音が必要です' : 'この内容で提出する';
+  }
+
+  $('review-list').addEventListener('click', (e) => {
+    const p = e.target.closest('[data-play]');
+    const r = e.target.closest('[data-retake]');
+    if (p) {
+      const k = Number(p.dataset.play);
+      if (playingIdx === k) { player.pause(); playingIdx = -1; }
+      else if (state.takes[k]) { player.src = state.takes[k].url; player.play(); playingIdx = k; }
+      renderReview();
+    } else if (r) {
+      player.pause(); playingIdx = -1;
+      state.idx = Number(r.dataset.retake);
+      state.returnToReview = true;
+      show('s-record'); renderRecord();
+    }
+  });
+
+  // ---------- 送信 ----------
+  function toBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result).split(',')[1]);
+      fr.onerror = () => reject(fr.error);
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  async function post(body) {
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(API, { method: 'POST', body: JSON.stringify(body) });
+        const json = await res.json();
+        if (!json.ok) throw Object.assign(new Error(json.error || 'error'), { server: true });
+        return json;
+      } catch (e) {
+        lastErr = e;
+        if (e.server) break; // 受付側が拒否したものは繰り返さない
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
+  const SERVER_ERRORS = {
+    closed: '締切を過ぎたため受け付けられませんでした。',
+    not_found: '課題が見つかりませんでした。',
+    too_large: '録音が大きすぎます。短く録り直してください。',
+    bad_request: '送信内容に不足があります。ページを開き直してください。',
+  };
+
+  async function send() {
+    const a = state.assignment, total = a.items.length;
+    $('btn-send').disabled = true;
+    $('send-error').hidden = true;
+    $('send-progress').hidden = false;
+    if (!state.submissionId) state.submissionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const base = { assignmentId: a.id, submissionId: state.submissionId, studentId: state.student.id, name: state.student.name };
+    const setProg = (n, label) => { $('send-bar').style.width = (n / (total + 1) * 100) + '%'; $('send-label').textContent = label; };
+    try {
+      for (let k = 0; k < total; k++) {
+        setProg(k, '送信中 ' + (k + 1) + ' / ' + total);
+        if (state.uploaded.has(k)) continue;
+        const t = state.takes[k], item = a.items[k];
+        if (DEMO) { await new Promise((r) => setTimeout(r, 350)); }
+        else {
+          await post(Object.assign({}, base, {
+            action: 'upload', itemNo: item.no, itemText: item.text, durationSec: +t.dur.toFixed(3),
+            sampleRate: t.rate, peak: +t.peak.toFixed(4), data: await toBase64(t.blob),
+          }));
+        }
+        state.uploaded.add(k);
+      }
+      setProg(total, '受付を確認しています…');
+      let result;
+      if (DEMO) result = { receipt: 'DEMO-' + state.submissionId.toUpperCase(), receivedAt: new Date().toLocaleString('ja-JP'), received: total };
+      else result = await post(Object.assign({}, base, { action: 'finish', count: total, userAgent: navigator.userAgent }));
+      setProg(total + 1, '完了');
+      state.submitted = true;
+      $('d-receipt').textContent = result.receipt;
+      $('d-title').textContent = a.title;
+      $('d-name').textContent = state.student.name + '（' + state.student.id + '）';
+      $('d-count').textContent = result.received + ' / ' + total + ' 項目';
+      $('d-time').textContent = result.receivedAt;
+      $('d-demo').hidden = !DEMO;
+      show('s-done');
+    } catch (e) {
+      const msg = (e.server && SERVER_ERRORS[e.message]) ||
+        '送信できませんでした。電波のよい場所で「もう一度送信する」を押してください。送信済みの項目は送り直しません。';
+      $('send-error').textContent = msg;
+      $('send-error').hidden = false;
+      $('btn-send').disabled = false;
+      $('btn-send').textContent = 'もう一度送信する';
+    }
+  }
+
+  // ---------- 操作 ----------
+  $('f-student').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = $('student-id').value.trim(), name = $('student-name').value.trim();
+    const err = $('start-error');
+    err.hidden = true;
+    if (!id || !name) { err.textContent = '学籍番号と氏名を入れてください。'; err.hidden = false; return; }
+    state.student = { id, name };
+    try { localStorage.setItem('vs.studentId', id); localStorage.setItem('vs.studentName', name); } catch (x) { /* 無視 */ }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      err.innerHTML = 'このブラウザでは録音できません。<strong>Safari（iPhone）かChrome（Android）</strong>で開き直してください。';
+      err.hidden = false; return;
+    }
+    $('btn-begin').disabled = true;
+    try {
+      if (!rec.ctx) await rec.init();
+      state.idx = 0;
+      show('s-record'); renderRecord();
+    } catch (x) {
+      err.innerHTML = '<strong>マイクを使えませんでした</strong>' +
+        'iPhone：アドレスバーの「ぁあ」→「Webサイトの設定」→「マイク」を「許可」にして、ページを読み込み直してください。<br>' +
+        'Android：アドレスバー左のアイコン→「権限」→「マイク」を許可して、ページを読み込み直してください。';
+      err.hidden = false;
+    } finally {
+      $('btn-begin').disabled = !!state.assignment.closed;
+    }
+  });
+
+  $('btn-rec').addEventListener('click', () => { rec.recording ? stopRec() : startRec(); });
+  $('btn-retake').addEventListener('click', () => {
+    $('take-audio').pause();
+    $('r-take').hidden = true; $('r-recorder').hidden = false;
+    startRec();
+  });
+  $('btn-next').addEventListener('click', () => {
+    $('take-audio').pause();
+    const a = state.assignment;
+    const nextMissing = a.items.findIndex((_, k) => k > state.idx && !state.takes[k]);
+    if (state.returnToReview || state.idx === a.items.length - 1 || nextMissing < 0) {
+      state.returnToReview = false;
+      show('s-review'); renderReview();
+    } else {
+      state.idx = state.idx + 1; renderRecord();
+    }
+  });
+  $('btn-prev').addEventListener('click', () => {
+    $('take-audio').pause();
+    if (state.idx > 0) { state.idx -= 1; state.returnToReview = false; renderRecord(); }
+  });
+  $('btn-send').addEventListener('click', send);
+
+  window.addEventListener('beforeunload', (e) => {
+    if (state.takes.some(Boolean) && !state.submitted) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ---------- 起動 ----------
+  loadAssignment().then((a) => {
+    a.items.sort((x, y) => x.no - y.no);
+    state.assignment = a;
+    fillStart(a);
+    show('s-start');
+  }).catch((e) => {
+    $('error-msg').textContent = e.message || '課題を読み込めませんでした。';
+    show('s-error');
+  });
+})();
+</script>
+</body>
+</html>
