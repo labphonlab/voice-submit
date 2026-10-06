@@ -121,6 +121,16 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
 .bar { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }
 
+/* 課題一覧 */
+ul.assignments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+ul.assignments a { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; }
+ul.assignments a:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+ul.assignments .t { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+ul.assignments .m { grid-column: 1; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+ul.assignments .go { grid-row: 1 / 3; grid-column: 2; color: var(--accent); font-weight: 700; }
+ul.assignments a.closed { opacity: .6; }
+ul.assignments a.closed .go { color: var(--muted); }
+
 /* 完了画面 */
 .receipt { text-align: center; padding: 26px 18px; }
 .receipt .check { width: 56px; height: 56px; border-radius: 50%; background: var(--ok); color: var(--surface); display: grid; place-items: center; margin: 0 auto 12px; font-size: 1.8rem; font-weight: 700; }
@@ -141,7 +151,19 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
     <p class="small muted">リンクをもう一度確かめるか、担当の先生に連絡してください。</p>
   </section>
 
+  <section id="s-list" class="stack" hidden>
+    <div class="stack" style="gap:6px">
+      <span class="eyebrow">音声課題</span>
+      <h1>提出する課題を選んでください</h1>
+    </div>
+    <p class="small muted">このページをブックマークしておくと、次回からもここから提出できます。</p>
+    <div id="list-inapp" class="notice warn" hidden></div>
+    <ul class="assignments" id="assignment-list"></ul>
+    <p class="small muted" id="list-empty" hidden>いま受け付けている課題はありません。</p>
+  </section>
+
   <section id="s-start" class="stack" hidden>
+    <a class="linkish" id="start-back" href="./" style="text-decoration:none">← 課題の一覧</a>
     <div class="stack" style="gap:6px">
       <span class="eyebrow">音声課題</span>
       <h1 id="a-title"></h1>
@@ -238,6 +260,7 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
     </dl>
     <p class="small muted">念のため、この画面をスクリーンショットで保存しておいてください。もう一度提出すると、新しい提出として受け付けます。</p>
     <div id="d-demo" class="notice warn" hidden><strong>デモ表示です</strong>実際には送信していません。</div>
+    <a class="btn secondary block" href="./">課題の一覧へ</a>
   </section>
 
 </main>
@@ -249,7 +272,7 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
   const API = (CFG.apiUrl || '').trim();
   const DEMO = !API;
   const $ = (id) => document.getElementById(id);
-  const screens = ['s-loading', 's-error', 's-start', 's-record', 's-review', 's-done'];
+  const screens = ['s-loading', 's-error', 's-list', 's-start', 's-record', 's-review', 's-done'];
   function show(id) {
     screens.forEach((s) => { $(s).hidden = s !== id; });
     window.scrollTo(0, 0);
@@ -271,18 +294,46 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
     ],
   };
 
-  async function loadAssignment() {
-    const params = new URLSearchParams(location.search);
-    const id = (params.get('a') || '').trim();
+  const ASSIGNMENT_ID = (new URLSearchParams(location.search).get('a') || '').trim();
+
+  async function loadAssignment(id) {
     if (DEMO) return DEMO_ASSIGNMENT;
-    if (!id) throw new Error('リンクに課題の指定（?a=…）がありません。');
     const res = await fetch(API + '?action=config&a=' + encodeURIComponent(id));
     const json = await res.json();
     if (!json.ok) {
       if (json.error === 'not_found') throw new Error('課題「' + id + '」は見つかりませんでした。');
+      if (json.error === 'not_open') throw new Error('この課題はまだ公開されていません（公開 ' + json.opensAt + '）。');
       throw new Error('受付先からエラーが返りました（' + json.error + '）。');
     }
     return json.assignment;
+  }
+
+  async function loadList() {
+    if (DEMO) return [{ id: 'demo', title: DEMO_ASSIGNMENT.title, deadline: '', closed: false, count: DEMO_ASSIGNMENT.items.length }];
+    const res = await fetch(API + '?action=list');
+    const json = await res.json();
+    if (!json.ok) throw new Error('受付先からエラーが返りました（' + json.error + '）。');
+    return json.assignments;
+  }
+
+  function renderList(list) {
+    const ul = $('assignment-list');
+    ul.innerHTML = '';
+    list.forEach((a) => {
+      const li = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = '?a=' + encodeURIComponent(a.id) + (/\bLine\//i.test(navigator.userAgent) ? '&openExternalBrowser=1' : '');
+      if (a.closed) link.className = 'closed';
+      link.innerHTML = '<span class="t"></span><span class="go"></span><span class="m"></span>';
+      link.querySelector('.t').textContent = a.title;
+      link.querySelector('.go').textContent = a.closed ? '締切済み' : '開く →';
+      link.querySelector('.m').textContent = a.count + ' 項目・締切 ' + (a.deadline || 'なし');
+      li.appendChild(link);
+      ul.appendChild(li);
+    });
+    $('list-empty').hidden = list.some((a) => !a.closed);
+    const w = inAppBrowserNotice();
+    if (w) { $('list-inapp').innerHTML = w; $('list-inapp').hidden = false; }
   }
 
   // ---------- アプリ内ブラウザの検出 ----------
@@ -558,7 +609,8 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
     $('send-error').hidden = true;
     $('send-progress').hidden = false;
     if (!state.submissionId) state.submissionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    const base = { assignmentId: a.id, submissionId: state.submissionId, studentId: state.student.id, name: state.student.name };
+    if (!state.startedAt) state.startedAt = Date.now();
+    const base = { assignmentId: a.id, submissionId: state.submissionId, startedAt: state.startedAt, studentId: state.student.id, name: state.student.name };
     const setProg = (n, label) => { $('send-bar').style.width = (n / (total + 1) * 100) + '%'; $('send-label').textContent = label; };
     try {
       for (let k = 0; k < total; k++) {
@@ -653,12 +705,15 @@ ol.review .sub .warn { color: var(--warn); font-weight: 700; }
   });
 
   // ---------- 起動 ----------
-  loadAssignment().then((a) => {
-    a.items.sort((x, y) => x.no - y.no);
-    state.assignment = a;
-    fillStart(a);
-    show('s-start');
-  }).catch((e) => {
+  const boot = ASSIGNMENT_ID || DEMO
+    ? loadAssignment(ASSIGNMENT_ID).then((a) => {
+        a.items.sort((x, y) => x.no - y.no);
+        state.assignment = a;
+        fillStart(a);
+        show('s-start');
+      })
+    : loadList().then((list) => { renderList(list); show('s-list'); });
+  boot.catch((e) => {
     $('error-msg').textContent = e.message || '課題を読み込めませんでした。';
     show('s-error');
   });
